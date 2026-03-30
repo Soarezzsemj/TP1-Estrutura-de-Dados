@@ -1,0 +1,8 @@
+//
+// Created by Soarezz on 30/03/26.
+//
+
+#ifndef TP1_ESTRUTURA_DE_DADOS_LIBS_H
+#define TP1_ESTRUTURA_DE_DADOS_LIBS_H
+
+#endif //TP1_ESTRUTURA_DE_DADOS_LIBS_H
