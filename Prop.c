@@ -22,8 +22,17 @@ static char *meu_strsep(char **sp, const char *delim) {
 /* Remove caracteres de quebra de linha e espaços do final da string */
 static void trim_eol(char *s) {
     int n = (int)strlen(s);
-    while (n > 0 && (s[n-1]=='\r' || s[n-1]=='\n' || s[n-1]==' '))
+    while (n > 0 && (s[n-1]=='\r' || s[n-1]=='\n' || s[n-1]==' ' || s[n-1]=='"'))
         s[--n] = '\0';
+    /* Remove aspas do início */
+    if (s[0] == '"') {
+        int j = 0;
+        while (s[j+1] != '\0') {
+            s[j] = s[j+1];
+            j++;
+        }
+        s[j] = '\0';
+    }
 }
 
 /* Compara duas strings ignorando diferenças entre maiúsculas e minúsculas */
@@ -31,6 +40,27 @@ static int cmp_ci(const char *a, const char *b) {
     while (*a && *b)
         if (tolower((unsigned char)*a++) != tolower((unsigned char)*b++)) return 0;
     return *a == '\0' && *b == '\0';
+}
+
+/* Gera um nome de arquivo seguro a partir do nome do municipio */
+static void montar_nome_arquivo_municipio(char *dest, size_t dest_sz, const char *busca) {
+    size_t j = 0;
+    if (!dest || dest_sz == 0) return;
+
+    for (size_t i = 0; busca && busca[i] != '\0' && j + 1 < dest_sz; i++) {
+        unsigned char c = (unsigned char)busca[i];
+        if (isalnum(c) || c == '-' || c == '_') {
+            dest[j++] = (char)c;
+        } else if (c == ' ') {
+            dest[j++] = '_';
+        }
+    }
+
+    if (j == 0) {
+        snprintf(dest, dest_sz, "municipio_filtrado");
+    } else {
+        dest[j] = '\0';
+    }
 }
 
 /* Detecta automaticamente se o separador do CSV é vírgula ou ponto-e-vírgula */
@@ -279,14 +309,129 @@ void gerar_resumo(Lista *L) {
     printf("   resumo.csv gerado com %d tribunais.\n", n);
 }
 
+/* Função para gerar resumo filtrado por estado (UF) */
+void gerar_resumo_por_estado(Lista *L, const char *uf) {
+    if (!L || !L->Dados || !uf || uf[0] == '\0') {
+        fprintf(stderr, "Erro: parametros invalidos.\n");
+        return;
+    }
+
+    /* Estrutura auxiliar para agrupar dados por tribunal */
+    typedef struct {
+        char sigla[12];
+        long jul1,  nov1,  susp1,  des1;
+        long jul2a, dist2a, susp2a;
+        long jul2an, dist2an, susp2an, des2an;
+        long jul4a, dist4a, susp4a;
+        long jul4b, dist4b, susp4b;
+    } RT;
+
+    RT trib[200];
+    int n = 0;
+
+    /* Agrupa dados por tribunal, apenas do estado especificado */
+    for (int i = 0; i < L->Tamanho; i++) {
+        Processo *p = &L->Dados[i];
+
+        /* Verifica se o registro pertence ao estado solicitado (case-insensitive) */
+        if (tolower((unsigned char)p->uf_oj[0]) != tolower((unsigned char)uf[0]) ||
+            tolower((unsigned char)p->uf_oj[1]) != tolower((unsigned char)uf[1])) {
+            continue;
+        }
+
+        /* Procura se já existe uma entrada para este tribunal */
+        int idx = -1;
+        for (int j = 0; j < n; j++)
+            if (strcmp(trib[j].sigla, p->sigla_tribunal) == 0) { idx = j; break; }
+
+        /* Se não encontrou, cria uma nova entrada */
+        if (idx < 0) {
+            if (n >= 200) continue;
+            idx = n++;
+            memset(&trib[idx], 0, sizeof(RT));
+            strncpy(trib[idx].sigla, p->sigla_tribunal, 11);
+        }
+
+        /* Soma os valores para cada meta */
+        trib[idx].jul1    += p->julgados_2026;
+        trib[idx].nov1    += p->casos_novos_2026;
+        trib[idx].susp1   += p->suspensos_2026;
+        trib[idx].des1    += p->dessobrestados_2026;
+        trib[idx].jul2a   += p->julgm2_a;
+        trib[idx].dist2a  += p->distm2_a;
+        trib[idx].susp2a  += p->suspm2_a;
+        trib[idx].jul2an  += p->julgm2_ant;
+        trib[idx].dist2an += p->distm2_ant;
+        trib[idx].susp2an += p->suspm2_ant;
+        trib[idx].des2an  += p->desom2_ant;
+        trib[idx].jul4a   += p->julgm4_a;
+        trib[idx].dist4a  += p->distm4_a;
+        trib[idx].susp4a  += p->suspm4_a;
+        trib[idx].jul4b   += p->julgm4_b;
+        trib[idx].dist4b  += p->distm4_b;
+        trib[idx].susp4b  += p->suspm4_b;
+    }
+
+    /* Se não encontrou dados para este estado */
+    if (n == 0) {
+        printf("   Nenhum tribunal encontrado para o estado %s.\n", uf);
+        return;
+    }
+
+    /* Cria o arquivo resumo_{UF}.csv */
+    char nome_arq[100];
+    snprintf(nome_arq, sizeof(nome_arq), "resumo_%s.csv", uf);
+
+    FILE *f = fopen(nome_arq, "w");
+    if (!f) { fprintf(stderr, "Erro ao criar %s\n", nome_arq); return; }
+
+    /* Escreve o cabeçalho */
+    fprintf(f, "sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B\n");
+
+    /* Calcula e escreve as metas para cada tribunal do estado */
+    for (int i = 0; i < n; i++) {
+        RT *t = &trib[i];
+        double m1=0, m2a=0, m2an=0, m4a=0, m4b=0;
+
+        long d1   = t->nov1  + t->des1  - t->susp1;
+        long d2a  = t->dist2a  - t->susp2a;
+        long d2an = t->dist2an - t->susp2an - t->des2an;
+        long d4a  = t->dist4a  - t->susp4a;
+        long d4b  = t->dist4b  - t->susp4b;
+
+        if (d1   != 0) m1   = (double)t->jul1  / d1   * 100.0;
+        if (d2a  != 0) m2a  = (double)t->jul2a / d2a  * (1000.0 / 7.0);
+        if (d2an != 0) m2an = (double)t->jul2an/ d2an * 100.0;
+        if (d4a  != 0) m4a  = (double)t->jul4a / d4a  * 100.0;
+        if (d4b  != 0) m4b  = (double)t->jul4b / d4b  * 100.0;
+
+        fprintf(f, "%s;%ld;%.2f%%;%.2f%%;%.2f%%;%.2f%%;%.2f%%\n",
+                t->sigla, t->jul1, m1, m2a, m2an, m4a, m4b);
+    }
+    fclose(f);
+    printf("   %s gerado com %d tribunal(is) do estado %s.\n", nome_arq, n, uf);
+}
+
 /* ===========================================
    FILTRAR DADOS POR MUNICÍPIO
    Cria um arquivo CSV específico com registros de um município
    =========================================== */
 
-void filtrar_municipio(Lista *L, char *busca) {
+void filtrar_municipio(Lista *L, const char *busca) {
+    if (!L || !L->Dados || !busca || busca[0] == '\0') {
+        fprintf(stderr, "Erro: parametros invalidos para filtrar municipio.\n");
+        return;
+    }
+
+    char municipio_sanitizado[180];
+    montar_nome_arquivo_municipio(municipio_sanitizado, sizeof municipio_sanitizado, busca);
+
     char nome_arq[200];
-    sprintf(nome_arq, "%s.csv", busca);  /* Nome do arquivo será o nome do município */
+    int n = snprintf(nome_arq, sizeof nome_arq, "%s.csv", municipio_sanitizado);
+    if (n < 0 || n >= (int)sizeof nome_arq) {
+        fprintf(stderr, "Erro: nome de arquivo muito grande.\n");
+        return;
+    }
 
     FILE *f = fopen(nome_arq, "w");
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", nome_arq); return; }

@@ -49,6 +49,7 @@ void   adicionar_processo(Lista *L, Processo P);
 void   carregar_arquivo(Lista *L, const char *nome_arquivo);
 void   concatenar_arquivos(Lista *L);
 void   gerar_resumo(Lista *L);
-void   filtrar_municipio(Lista *L, char *nome_busca);
+void   gerar_resumo_por_estado(Lista *L, const char *uf);
+void   filtrar_municipio(Lista *L, const char *nome_busca);
 
 #endif

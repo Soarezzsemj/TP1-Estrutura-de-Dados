@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "Libs.h"
 
 int main(void) {
@@ -26,8 +27,14 @@ int main(void) {
     printf("Carregando %d arquivos...\n", n_arquivos);
     for (int i = 0; i < n_arquivos; i++) {
         char caminho[256];
-        snprintf(caminho, sizeof(caminho), "%s", arquivos[i]);
-        printf("  [%2d/%d] %s\n", i+1, n_arquivos, caminho);
+        FILE *teste = fopen(arquivos[i], "r");
+        if (teste) {
+            fclose(teste);
+            snprintf(caminho, sizeof(caminho), "%s", arquivos[i]);
+        } else {
+            snprintf(caminho, sizeof(caminho), "../%s", arquivos[i]);
+        }
+        printf("  [%2d/%d] %s\n", i+1, n_arquivos, arquivos[i]);
         carregar_arquivo(L, caminho);
     }
     printf("Total de registros carregados: %d\n\n", L->Tamanho);
@@ -40,10 +47,40 @@ int main(void) {
     printf("2. Gerando resumo.csv (5 metas por tribunal)...\n");
     gerar_resumo(L);
 
-    /* Passo 4: Permite filtrar os dados por município */
-    printf("3. Digite o municipio para filtrar: ");
+    /* Passo 4: Permite gerar resumo filtrado por estado */
+    printf("\n4. Digite o estado (UF) para gerar resumo filtrado (ex: SP, RJ, AC): ");
+    char estado[10];
+    if (fgets(estado, sizeof estado, stdin)) {
+        estado[strcspn(estado, "\r\n")] = '\0';
+        /* Remove espaços em branco */
+        for (int i = 0; i < (int)strlen(estado); i++) {
+            if (estado[i] == ' ') {
+                int j = i;
+                while (estado[j] != '\0') {
+                    estado[j] = estado[j+1];
+                    j++;
+                }
+                i--;
+            }
+        }
+        /* Converte para maiúscula */
+        for (int i = 0; estado[i] != '\0'; i++) {
+            estado[i] = (char)toupper((unsigned char)estado[i]);
+        }
+        if (estado[0] != '\0') {
+            gerar_resumo_por_estado(L, estado);
+        }
+    }
+
+    /* Passo 5: Permite filtrar os dados por município */
+    printf("5. Digite o municipio para filtrar: ");
     char busca[100];
-    scanf(" %99s", busca);
+    if (!fgets(busca, sizeof busca, stdin)) {
+        fprintf(stderr, "Erro ao ler municipio.\n");
+        destruir_lista(L);
+        return 1;
+    }
+    busca[strcspn(busca, "\r\n")] = '\0';
     filtrar_municipio(L, busca);
 
     destruir_lista(L);
