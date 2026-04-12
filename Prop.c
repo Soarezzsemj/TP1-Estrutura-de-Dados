@@ -30,16 +30,31 @@ static int garantir_pasta_saida(void) {
 
 /* Monta caminho completo dentro da pasta de saída */
 static int montar_caminho_saida(char *dest, size_t dest_sz, const char *nome_arquivo) {
+    if (!dest || dest_sz == 0 || !nome_arquivo || nome_arquivo[0] == '\0') return 0;
     int n = snprintf(dest, dest_sz, "%s/%s", PASTA_SAIDA, nome_arquivo);
     return n >= 0 && n < (int)dest_sz;
 }
 
-/* UF valida: exatamente 2 letras */
+/* UF valida: exatamente 2 letras e pertencente aos estados do Brasil */
 static int uf_valida(const char *uf) {
-    return uf &&
-           strlen(uf) == 2 &&
-           isalpha((unsigned char)uf[0]) &&
-           isalpha((unsigned char)uf[1]);
+    static const char *ufs_validas[] = {
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+        "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+        "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+    };
+
+    if (!uf ||
+        strlen(uf) != 2 ||
+        !isalpha((unsigned char)uf[0]) ||
+        !isalpha((unsigned char)uf[1])) {
+        return 0;
+    }
+
+    int total_ufs = (int)(sizeof(ufs_validas) / sizeof(ufs_validas[0]));
+    for (int i = 0; i < total_ufs; i++) {
+        if (strcmp(uf, ufs_validas[i]) == 0) return 1;
+    }
+    return 0;
 }
 
 /* Versão própria da função strsep (que não existe no Windows) */
@@ -221,22 +236,49 @@ static void escrever_linha_resumo(FILE *f, const RT *t) {
    =========================================== */
 
 Lista *criar_lista(int cap) {
+    if (cap <= 0) {
+        fprintf(stderr, "Erro: capacidade inicial invalida (%d).\n", cap);
+        return NULL;
+    }
+
     Lista *L = (Lista*)malloc(sizeof(Lista));
+    if (!L) {
+        fprintf(stderr, "Erro: falha ao alocar estrutura da lista.\n");
+        return NULL;
+    }
+
     L->Dados     = (Processo*)malloc(sizeof(Processo) * cap);
+    if (!L->Dados) {
+        fprintf(stderr, "Erro: falha ao alocar vetor de processos.\n");
+        free(L);
+        return NULL;
+    }
+
     L->Tamanho   = 0;
     L->Capacidade = cap;
     return L;
 }
 
 void destruir_lista(Lista *L) {
+    if (!L) return;
     free(L->Dados);
     free(L);
 }
 
 void adicionar_processo(Lista *L, Processo P) {
+    if (!L || !L->Dados) {
+        fprintf(stderr, "Erro: lista invalida ao adicionar processo.\n");
+        return;
+    }
+
     if (L->Tamanho == L->Capacidade) {
         L->Capacidade *= 2;  /* Dobra a capacidade quando cheia */
-        L->Dados = (Processo*)realloc(L->Dados, sizeof(Processo) * L->Capacidade);
+        Processo *novo = (Processo*)realloc(L->Dados, sizeof(Processo) * L->Capacidade);
+        if (!novo) {
+            fprintf(stderr, "Erro: falha ao expandir a lista de processos.\n");
+            return;
+        }
+        L->Dados = novo;
     }
     L->Dados[L->Tamanho++] = P;
 }
@@ -247,6 +289,11 @@ void adicionar_processo(Lista *L, Processo P) {
    =========================================== */
 
 void carregar_arquivo(Lista *L, const char *nome) {
+    if (!L || !L->Dados || !nome || nome[0] == '\0') {
+        fprintf(stderr, "Erro: parametros invalidos em carregar_arquivo.\n");
+        return;
+    }
+
     FILE *f = fopen(nome, "r");
     if (!f) { fprintf(stderr, "Aviso: arquivo nao encontrado: %s\n", nome); return; }
 
@@ -315,6 +362,11 @@ void carregar_arquivo(Lista *L, const char *nome) {
    =========================================== */
 
 void concatenar_arquivos(Lista *L) {
+    if (!L || !L->Dados) {
+        fprintf(stderr, "Erro: lista invalida para concatenar arquivos.\n");
+        return;
+    }
+
     if (!garantir_pasta_saida()) return;
 
     char caminho_saida[260];
@@ -347,6 +399,11 @@ void concatenar_arquivos(Lista *L) {
    =========================================== */
 
 void gerar_resumo(Lista *L) {
+    if (!L || !L->Dados) {
+        fprintf(stderr, "Erro: lista invalida para gerar resumo.\n");
+        return;
+    }
+
     RT trib[200];   /* Suporta até 200 tribunais diferentes */
     int n = 0;      /* Número de tribunais encontrados */
 
@@ -384,7 +441,7 @@ void gerar_resumo(Lista *L) {
 /* Função para gerar resumo filtrado por estado (UF) */
 void gerar_resumo_por_estado(Lista *L, const char *uf) {
     if (!L || !L->Dados || !uf_valida(uf)) {
-        fprintf(stderr, "Erro: UF invalida. Use exatamente 2 letras (ex: SP).\n");
+        fprintf(stderr, "Erro: UF invalida. Informe uma UF brasileira valida (ex: SP).\n");
         return;
     }
 

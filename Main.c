@@ -6,6 +6,8 @@
 
 /* Remove espacos da string e converte para maiusculo */
 static void normalizar_uf(char *uf) {
+    if (!uf) return;
+
     int escrita = 0;
     for (int leitura = 0; uf[leitura] != '\0'; leitura++) {
         if (uf[leitura] == ' ') continue;
@@ -14,11 +16,26 @@ static void normalizar_uf(char *uf) {
     uf[escrita] = '\0';
 }
 
-/* UF valida: exatamente 2 letras (A-Z) */
+/* UF valida: exatamente 2 letras e pertencente aos estados do Brasil */
 static int uf_valida(const char *uf) {
-    return strlen(uf) == 2 &&
-           isalpha((unsigned char)uf[0]) &&
-           isalpha((unsigned char)uf[1]);
+    static const char *ufs_validas[] = {
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+        "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+        "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+    };
+
+    if (!uf ||
+        strlen(uf) != 2 ||
+        !isalpha((unsigned char)uf[0]) ||
+        !isalpha((unsigned char)uf[1])) {
+        return 0;
+    }
+
+    int total_ufs = (int)(sizeof(ufs_validas) / sizeof(ufs_validas[0]));
+    for (int i = 0; i < total_ufs; i++) {
+        if (strcmp(uf, ufs_validas[i]) == 0) return 1;
+    }
+    return 0;
 }
 
 int main(void) {
@@ -39,6 +56,10 @@ int main(void) {
 
     /* Cria uma lista grande o suficiente para armazenar todos os dados */
     Lista *L = criar_lista(100000);
+    if (!L) {
+        fprintf(stderr, "Erro fatal: nao foi possivel inicializar a lista de processos.\n");
+        return 1;
+    }
 
     /* Passo 1: Carrega todos os arquivos CSV na memória */
     printf("Carregando %d arquivos...\n", n_arquivos);
@@ -73,10 +94,12 @@ int main(void) {
         if (estado[0] == '\0') {
             printf("   UF vazia. Resumo por estado ignorado.\n");
         } else if (!uf_valida(estado)) {
-            printf("   UF invalida (%s). Use exatamente 2 letras, ex: SP.\n", estado);
+            printf("   UF invalida (%s). Informe uma UF brasileira valida (ex: SP, RJ, AC).\n", estado);
         } else {
             gerar_resumo_por_estado(L, estado);
         }
+    } else {
+        fprintf(stderr, "Erro ao ler a UF informada.\n");
     }
 
     /* Passo 5: Permite filtrar os dados por município */
@@ -88,7 +111,11 @@ int main(void) {
         return 1;
     }
     busca[strcspn(busca, "\r\n")] = '\0';
-    filtrar_municipio(L, busca);
+    if (busca[0] == '\0') {
+        printf("   Municipio vazio. Filtro por municipio ignorado.\n");
+    } else {
+        filtrar_municipio(L, busca);
+    }
 
     destruir_lista(L);
     printf("\nConcluido.\n");
