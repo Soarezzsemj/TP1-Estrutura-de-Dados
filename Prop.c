@@ -35,6 +35,24 @@ static int montar_caminho_saida(char *dest, size_t dest_sz, const char *nome_arq
     return n >= 0 && n < (int)dest_sz;
 }
 
+/* Retorna 1 se a string contiver ao menos um digito */
+static int contem_numero(const char *texto) {
+    if (!texto) return 0;
+    for (int i = 0; texto[i] != '\0'; i++) {
+        if (isdigit((unsigned char)texto[i])) return 1;
+    }
+    return 0;
+}
+
+/* Verifica se a string contém somente caracteres ASCII */
+static int somente_ascii(const char *texto) {
+    if (!texto) return 1;
+    for (int i = 0; texto[i] != '\0'; i++) {
+        if ((unsigned char)texto[i] > 127) return 0;
+    }
+    return 1;
+}
+
 /* UF valida: exatamente 2 letras e pertencente aos estados do Brasil */
 static int uf_valida(const char *uf) {
     static const char *ufs_validas[] = {
@@ -505,6 +523,10 @@ void filtrar_municipio(Lista *L, const char *busca) {
         fprintf(stderr, "Erro: parametros invalidos para filtrar municipio.\n");
         return;
     }
+    if (contem_numero(busca)) {
+        fprintf(stderr, "Erro: municipio invalido. Nao utilize numeros.\n");
+        return;
+    }
 
     char municipio_sanitizado[180];
     montar_nome_arquivo_municipio(municipio_sanitizado, sizeof municipio_sanitizado, busca);
@@ -539,4 +561,8 @@ void filtrar_municipio(Lista *L, const char *busca) {
     }
     fclose(f);
     printf("   %d registro(s) encontrado(s) -> %s\n", encontrados, caminho_saida);
+    if (encontrados == 0 && somente_ascii(busca)) {
+        printf("   Dica: alguns municipios usam acentos na grafia oficial.\n");
+        printf("   Tente buscar novamente usando a grafia oficial do municipio.\n");
+    }
 }

@@ -16,6 +16,14 @@ static void normalizar_uf(char *uf) {
     uf[escrita] = '\0';
 }
 
+static void normalizar_municipio(char *municipio) {
+    if (!municipio) return;
+
+    for (int i = 0; municipio[i] != '\0'; i++) {
+        municipio[i] = (char)toupper((unsigned char)municipio[i]);
+    }
+}
+
 /* UF valida: exatamente 2 letras e pertencente aos estados do Brasil */
 static int uf_valida(const char *uf) {
     static const char *ufs_validas[] = {
@@ -34,6 +42,14 @@ static int uf_valida(const char *uf) {
     int total_ufs = (int)(sizeof(ufs_validas) / sizeof(ufs_validas[0]));
     for (int i = 0; i < total_ufs; i++) {
         if (strcmp(uf, ufs_validas[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+static int contem_numero(const char *texto) {
+    if (!texto) return 0;
+    for (int i = 0; texto[i] != '\0'; i++) {
+        if (isdigit((unsigned char)texto[i])) return 1;
     }
     return 0;
 }
@@ -94,7 +110,7 @@ int main(void) {
         if (estado[0] == '\0') {
             printf("   UF vazia. Resumo por estado ignorado.\n");
         } else if (!uf_valida(estado)) {
-            printf("   UF invalida (%s). Informe uma UF brasileira valida (ex: SP, RJ, AC).\n", estado);
+            printf("   UF invalida (%s). Nao use numeros e informe uma UF brasileira valida (ex: SP, RJ, AC).\n", estado);
         } else {
             gerar_resumo_por_estado(L, estado);
         }
@@ -103,7 +119,7 @@ int main(void) {
     }
 
     /* Passo 5: Permite filtrar os dados por município */
-    printf("5. Digite o municipio para filtrar: ");
+    printf("5. Digite o municipio para filtrar (dica: se nao encontrar, tente a grafia com acento): ");
     char busca[100];
     if (!fgets(busca, sizeof busca, stdin)) {
         fprintf(stderr, "Erro ao ler municipio.\n");
@@ -111,8 +127,11 @@ int main(void) {
         return 1;
     }
     busca[strcspn(busca, "\r\n")] = '\0';
+    normalizar_municipio(busca);
     if (busca[0] == '\0') {
         printf("   Municipio vazio. Filtro por municipio ignorado.\n");
+    } else if (contem_numero(busca)) {
+        printf("   Municipio invalido (%s). Nao utilize numeros.\n", busca);
     } else {
         filtrar_municipio(L, busca);
     }
