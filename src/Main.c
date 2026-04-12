@@ -53,9 +53,18 @@ static int contem_numero(const char *texto) {
 }
 
 static int resolver_caminho_arquivo(char *destino, size_t tamanho_destino, const char *arquivo) {
-    const char *pastas[] = { "dados/testes", "testes", "." };
+    const char *pastas[] = {
+        "dados/testes",
+        "../dados/testes",
+        "../../dados/testes",
+        "testes",
+        "../testes",
+        ".",
+        ".."
+    };
+    int total_pastas = (int)(sizeof(pastas) / sizeof(pastas[0]));
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < total_pastas; i++) {
         int n = snprintf(destino, tamanho_destino, "%s/%s", pastas[i], arquivo);
         if (n < 0 || n >= (int)tamanho_destino) continue;
 
