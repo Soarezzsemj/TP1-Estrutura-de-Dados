@@ -44,17 +44,29 @@ static int uf_valida(const char *uf) {
     return 0;
 }
 
-static int contem_numero(const char *texto) {
-    if (!texto) return 0;
-    for (int i = 0; texto[i] != '\0'; i++) {
-        if (isdigit((unsigned char)texto[i])) return 1;
-    }
-    return 0;
-}
-
 static int municipio_valido(const char *municipio) {
     if (!municipio || municipio[0] == '\0') return 0;
-    if (contem_numero(municipio)) return 0;
+
+    int tem_letra = 0;
+    for (int i = 0; municipio[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)municipio[i];
+
+        if (isalpha(c)) {
+            tem_letra = 1;
+            continue;
+        }
+
+        if (c == ' ' || c == '-' || c == '\'') continue;
+
+        if (c > 127) {
+            tem_letra = 1;
+            continue;
+        }
+
+        return 0;
+    }
+
+    if (!tem_letra) return 0;
     return 1;
 }
 
@@ -164,7 +176,7 @@ int main(void) {
         }
 
         if (!municipio_valido(busca)) {
-            printf("   Municipio invalido (%s). Nao utilize numeros.\n", busca);
+            printf("   Municipio invalido (%s). Use letras, espaco, hifen ou apostrofo.\n", busca);
             continue;
         }
 

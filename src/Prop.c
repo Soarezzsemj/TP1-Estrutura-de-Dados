@@ -35,13 +35,30 @@ static int montar_caminho_saida(char *dest, size_t dest_sz, const char *nome_arq
     return n >= 0 && n < (int)dest_sz;
 }
 
-/* Retorna 1 se a string contiver ao menos um digito */
-static int contem_numero(const char *texto) {
-    if (!texto) return 0;
-    for (int i = 0; texto[i] != '\0'; i++) {
-        if (isdigit((unsigned char)texto[i])) return 1;
+/* Valida se o municipio possui formato aceitavel */
+static int municipio_valido(const char *municipio) {
+    if (!municipio || municipio[0] == '\0') return 0;
+
+    int tem_letra = 0;
+    for (int i = 0; municipio[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)municipio[i];
+
+        if (isalpha(c)) {
+            tem_letra = 1;
+            continue;
+        }
+
+        if (c == ' ' || c == '-' || c == '\'') continue;
+
+        if (c > 127) {
+            tem_letra = 1;
+            continue;
+        }
+
+        return 0;
     }
-    return 0;
+
+    return tem_letra;
 }
 
 /* Verifica se a string contém somente caracteres ASCII */
@@ -523,8 +540,8 @@ void filtrar_municipio(Lista *L, const char *busca) {
         fprintf(stderr, "Erro: parametros invalidos para filtrar municipio.\n");
         return;
     }
-    if (contem_numero(busca)) {
-        fprintf(stderr, "Erro: municipio invalido. Nao utilize numeros.\n");
+    if (!municipio_valido(busca)) {
+        fprintf(stderr, "Erro: municipio invalido. Use letras, espaco, hifen ou apostrofo.\n");
         return;
     }
 
