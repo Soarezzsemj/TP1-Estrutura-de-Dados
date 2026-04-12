@@ -52,6 +52,12 @@ static int contem_numero(const char *texto) {
     return 0;
 }
 
+static int municipio_valido(const char *municipio) {
+    if (!municipio || municipio[0] == '\0') return 0;
+    if (contem_numero(municipio)) return 0;
+    return 1;
+}
+
 static int resolver_caminho_arquivo(char *destino, size_t tamanho_destino, const char *arquivo) {
     const char *pastas[] = {
         "dados/testes",
@@ -140,21 +146,30 @@ int main(void) {
         break;
     }
 
-    printf("5. Digite o municipio para filtrar (dica: se nao encontrar, tente a grafia com acento): ");
     char busca[100];
-    if (!fgets(busca, sizeof busca, stdin)) {
-        fprintf(stderr, "Erro ao ler municipio.\n");
-        destruir_lista(L);
-        return 1;
-    }
-    busca[strcspn(busca, "\r\n")] = '\0';
-    normalizar_municipio(busca);
-    if (busca[0] == '\0') {
-        printf("   Municipio vazio. Filtro por municipio ignorado.\n");
-    } else if (contem_numero(busca)) {
-        printf("   Municipio invalido (%s). Nao utilize numeros.\n", busca);
-    } else {
+    while (1) {
+        printf("5. Digite o municipio para filtrar (dica: se nao encontrar, tente a grafia com acento) ou ENTER para pular: ");
+        if (!fgets(busca, sizeof busca, stdin)) {
+            fprintf(stderr, "Erro ao ler municipio.\n");
+            destruir_lista(L);
+            return 1;
+        }
+
+        busca[strcspn(busca, "\r\n")] = '\0';
+        normalizar_municipio(busca);
+
+        if (busca[0] == '\0') {
+            printf("   Municipio vazio. Filtro por municipio ignorado.\n");
+            break;
+        }
+
+        if (!municipio_valido(busca)) {
+            printf("   Municipio invalido (%s). Nao utilize numeros.\n", busca);
+            continue;
+        }
+
         filtrar_municipio(L, busca);
+        break;
     }
 
     destruir_lista(L);
