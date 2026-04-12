@@ -68,6 +68,120 @@ static char detectar_sep(const char *linha) {
     return strchr(linha, ';') ? ';' : ',';
 }
 
+/* Estrutura auxiliar para agrupar dados por tribunal */
+typedef struct {
+    char sigla[12];  /* Sigla do tribunal (ex: TRE-AC) */
+    long jul1,  nov1,  susp1,  des1;         /* Para Meta1 */
+    long jul2a, dist2a, susp2a;              /* Para Meta2A */
+    long jul2an, dist2an, susp2an, des2an;   /* Para Meta2Ant */
+    long jul4a, dist4a, susp4a;              /* Para Meta4A */
+    long jul4b, dist4b, susp4b;              /* Para Meta4B */
+} RT;
+
+/* Preenche o campo correto do processo conforme a coluna do CSV */
+static void preencher_processo_por_coluna(Processo *p, int col, const char *tok) {
+    switch (col) {
+        case  0: strncpy(p->sigla_tribunal,   tok, 11); break;
+        case  1: strncpy(p->procedimento,     tok, 99); break;
+        case  2: strncpy(p->ramo_justica,     tok, 59); break;
+        case  3: strncpy(p->sigla_grau,       tok,  9); break;
+        case  4: strncpy(p->uf_oj,            tok,  4); break;
+        case  5: strncpy(p->municipio_oj,     tok, 99); break;
+        case  6: strncpy(p->id_ultimo_oj,     tok, 59); break;
+        case  7: strncpy(p->nome,             tok,199); break;
+        case  8: strncpy(p->mesano_cnm1,      tok, 19); break;
+        case  9: strncpy(p->mesano_sent,      tok, 19); break;
+        case 10: p->casos_novos_2026     = atoi(tok);         break;
+        case 11: p->julgados_2026        = atoi(tok);         break;
+        case 12: p->prim_sent2026        = atoi(tok);         break;
+        case 13: p->suspensos_2026       = atoi(tok);         break;
+        case 14: p->dessobrestados_2026  = atoi(tok);         break;
+        case 15: p->cumprimento_meta1    = (float)atof(tok);  break;
+        case 16: p->distm2_a             = atoi(tok);         break;
+        case 17: p->julgm2_a             = atoi(tok);         break;
+        case 18: p->suspm2_a             = atoi(tok);         break;
+        case 19: p->cumprimento_meta2a   = (float)atof(tok);  break;
+        case 20: p->distm2_ant           = atoi(tok);         break;
+        case 21: p->julgm2_ant           = atoi(tok);         break;
+        case 22: p->suspm2_ant           = atoi(tok);         break;
+        case 23: p->desom2_ant           = atoi(tok);         break;
+        case 24: p->cumprimento_meta2ant = (float)atof(tok);  break;
+        case 25: p->distm4_a             = atoi(tok);         break;
+        case 26: p->julgm4_a             = atoi(tok);         break;
+        case 27: p->suspm4_a             = atoi(tok);         break;
+        case 28: p->cumprimento_meta4a   = (float)atof(tok);  break;
+        case 29: p->distm4_b             = atoi(tok);         break;
+        case 30: p->julgm4_b             = atoi(tok);         break;
+        case 31: p->suspm4_b             = atoi(tok);         break;
+        case 32: p->cumprimento_meta4b   = (float)atof(tok);  break;
+        default: break;
+    }
+}
+
+/* Retorna (ou cria) o índice do tribunal no vetor auxiliar */
+static int obter_indice_tribunal(RT trib[], int *n, const char *sigla) {
+    for (int j = 0; j < *n; j++) {
+        if (strcmp(trib[j].sigla, sigla) == 0) return j;
+    }
+
+    if (*n >= 200) return -1;
+
+    int idx = (*n)++;
+    memset(&trib[idx], 0, sizeof(RT));
+    strncpy(trib[idx].sigla, sigla, 11);
+    return idx;
+}
+
+/* Soma os valores de um processo nas estruturas de meta do tribunal */
+static void acumular_metas(RT *t, const Processo *p) {
+    t->jul1    += p->julgados_2026;
+    t->nov1    += p->casos_novos_2026;
+    t->susp1   += p->suspensos_2026;
+    t->des1    += p->dessobrestados_2026;
+    t->jul2a   += p->julgm2_a;
+    t->dist2a  += p->distm2_a;
+    t->susp2a  += p->suspm2_a;
+    t->jul2an  += p->julgm2_ant;
+    t->dist2an += p->distm2_ant;
+    t->susp2an += p->suspm2_ant;
+    t->des2an  += p->desom2_ant;
+    t->jul4a   += p->julgm4_a;
+    t->dist4a  += p->distm4_a;
+    t->susp4a  += p->suspm4_a;
+    t->jul4b   += p->julgm4_b;
+    t->dist4b  += p->distm4_b;
+    t->susp4b  += p->suspm4_b;
+}
+
+/* Calcula as 5 metas do tribunal */
+static void calcular_metas(const RT *t, double *m1, double *m2a, double *m2an, double *m4a, double *m4b) {
+    long d1   = t->nov1  + t->des1  - t->susp1;
+    long d2a  = t->dist2a  - t->susp2a;
+    long d2an = t->dist2an - t->susp2an - t->des2an;
+    long d4a  = t->dist4a  - t->susp4a;
+    long d4b  = t->dist4b  - t->susp4b;
+
+    *m1 = *m2a = *m2an = *m4a = *m4b = 0.0;
+    if (d1   != 0) *m1   = (double)t->jul1  / d1   * 100.0;
+    if (d2a  != 0) *m2a  = (double)t->jul2a / d2a  * (1000.0 / 7.0);
+    if (d2an != 0) *m2an = (double)t->jul2an/ d2an * 100.0;
+    if (d4a  != 0) *m4a  = (double)t->jul4a / d4a  * 100.0;
+    if (d4b  != 0) *m4b  = (double)t->jul4b / d4b  * 100.0;
+}
+
+/* Escreve cabeçalho padrão do resumo */
+static void escrever_cabecalho_resumo(FILE *f) {
+    fprintf(f, "sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B\n");
+}
+
+/* Escreve uma linha de resumo (um tribunal) */
+static void escrever_linha_resumo(FILE *f, const RT *t) {
+    double m1, m2a, m2an, m4a, m4b;
+    calcular_metas(t, &m1, &m2a, &m2an, &m4a, &m4b);
+    fprintf(f, "%s;%ld;%.2f%%;%.2f%%;%.2f%%;%.2f%%;%.2f%%\n",
+            t->sigla, t->jul1, m1, m2a, m2an, m4a, m4b);
+}
+
 /* ===========================================
    ESTRUTURA DE DADOS: LISTA DINÂMICA
    =========================================== */
@@ -119,41 +233,7 @@ void carregar_arquivo(Lista *L, const char *nome) {
         /* Separa a linha em colunas usando o separador detectado */
         while ((tok = meu_strsep(&ptr, sep_str)) != NULL) {
             trim_eol(tok);  /* Remove quebras de linha */
-            switch (col) {
-                case  0: strncpy(p.sigla_tribunal,   tok, 11); break;
-                case  1: strncpy(p.procedimento,     tok, 99); break;
-                case  2: strncpy(p.ramo_justica,     tok, 59); break;
-                case  3: strncpy(p.sigla_grau,       tok,  9); break;
-                case  4: strncpy(p.uf_oj,            tok,  4); break;
-                case  5: strncpy(p.municipio_oj,     tok, 99); break;
-                case  6: strncpy(p.id_ultimo_oj,     tok, 59); break;
-                case  7: strncpy(p.nome,             tok,199); break;
-                case  8: strncpy(p.mesano_cnm1,      tok, 19); break;
-                case  9: strncpy(p.mesano_sent,      tok, 19); break;
-                case 10: p.casos_novos_2026     = atoi(tok);         break;
-                case 11: p.julgados_2026        = atoi(tok);         break;
-                case 12: p.prim_sent2026        = atoi(tok);         break;
-                case 13: p.suspensos_2026       = atoi(tok);         break;
-                case 14: p.dessobrestados_2026  = atoi(tok);         break;
-                case 15: p.cumprimento_meta1    = (float)atof(tok);  break;
-                case 16: p.distm2_a             = atoi(tok);         break;
-                case 17: p.julgm2_a             = atoi(tok);         break;
-                case 18: p.suspm2_a             = atoi(tok);         break;
-                case 19: p.cumprimento_meta2a   = (float)atof(tok);  break;
-                case 20: p.distm2_ant           = atoi(tok);         break;
-                case 21: p.julgm2_ant           = atoi(tok);         break;
-                case 22: p.suspm2_ant           = atoi(tok);         break;
-                case 23: p.desom2_ant           = atoi(tok);         break;
-                case 24: p.cumprimento_meta2ant = (float)atof(tok);  break;
-                case 25: p.distm4_a             = atoi(tok);         break;
-                case 26: p.julgm4_a             = atoi(tok);         break;
-                case 27: p.suspm4_a             = atoi(tok);         break;
-                case 28: p.cumprimento_meta4a   = (float)atof(tok);  break;
-                case 29: p.distm4_b             = atoi(tok);         break;
-                case 30: p.julgm4_b             = atoi(tok);         break;
-                case 31: p.suspm4_b             = atoi(tok);         break;
-                case 32: p.cumprimento_meta4b   = (float)atof(tok);  break;
-            }
+            preencher_processo_por_coluna(&p, col, tok);
             col++;
         }
         if (col > 5) adicionar_processo(L, p); /* Ignora linhas vazias ou incompletas */
@@ -225,54 +305,15 @@ void concatenar_arquivos(Lista *L) {
    =========================================== */
 
 void gerar_resumo(Lista *L) {
-    /* Estrutura auxiliar para agrupar dados por tribunal */
-    typedef struct {
-        char sigla[12];  /* Sigla do tribunal (ex: TRE-AC) */
-        long jul1,  nov1,  susp1,  des1;    /* Para Meta1 */
-        long jul2a, dist2a, susp2a;         /* Para Meta2A */
-        long jul2an, dist2an, susp2an, des2an;  /* Para Meta2Ant */
-        long jul4a, dist4a, susp4a;         /* Para Meta4A */
-        long jul4b, dist4b, susp4b;         /* Para Meta4B */
-    } RT;
-
     RT trib[200];   /* Suporta até 200 tribunais diferentes */
     int n = 0;      /* Número de tribunais encontrados */
 
     /* Agrupa os dados por tribunal */
     for (int i = 0; i < L->Tamanho; i++) {
         Processo *p = &L->Dados[i];
-
-        /* Procura se já existe uma entrada para este tribunal */
-        int idx = -1;
-        for (int j = 0; j < n; j++)
-            if (strcmp(trib[j].sigla, p->sigla_tribunal) == 0) { idx = j; break; }
-
-        /* Se não encontrou, cria uma nova entrada */
-        if (idx < 0) {
-            if (n >= 200) continue;  /* Limite de tribunais atingido */
-            idx = n++;
-            memset(&trib[idx], 0, sizeof(RT));
-            strncpy(trib[idx].sigla, p->sigla_tribunal, 11);
-        }
-
-        /* Soma os valores para cada meta */
-        trib[idx].jul1    += p->julgados_2026;
-        trib[idx].nov1    += p->casos_novos_2026;
-        trib[idx].susp1   += p->suspensos_2026;
-        trib[idx].des1    += p->dessobrestados_2026;
-        trib[idx].jul2a   += p->julgm2_a;
-        trib[idx].dist2a  += p->distm2_a;
-        trib[idx].susp2a  += p->suspm2_a;
-        trib[idx].jul2an  += p->julgm2_ant;
-        trib[idx].dist2an += p->distm2_ant;
-        trib[idx].susp2an += p->suspm2_ant;
-        trib[idx].des2an  += p->desom2_ant;
-        trib[idx].jul4a   += p->julgm4_a;
-        trib[idx].dist4a  += p->distm4_a;
-        trib[idx].susp4a  += p->suspm4_a;
-        trib[idx].jul4b   += p->julgm4_b;
-        trib[idx].dist4b  += p->distm4_b;
-        trib[idx].susp4b  += p->suspm4_b;
+        int idx = obter_indice_tribunal(trib, &n, p->sigla_tribunal);
+        if (idx < 0) continue;  /* Limite de tribunais atingido */
+        acumular_metas(&trib[idx], p);
     }
 
     /* Cria o arquivo resumo.csv */
@@ -280,30 +321,11 @@ void gerar_resumo(Lista *L) {
     if (!f) { fprintf(stderr, "Erro ao criar resumo.csv\n"); return; }
 
     /* Escreve o cabeçalho */
-    fprintf(f, "sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B\n");
+    escrever_cabecalho_resumo(f);
 
     /* Calcula e escreve as metas para cada tribunal */
     for (int i = 0; i < n; i++) {
-        RT *t = &trib[i];
-        double m1=0, m2a=0, m2an=0, m4a=0, m4b=0;
-
-        /* Calcula os denominadores para cada fórmula */
-        long d1   = t->nov1  + t->des1  - t->susp1;    /* Meta1 */
-        long d2a  = t->dist2a  - t->susp2a;            /* Meta2A */
-        long d2an = t->dist2an - t->susp2an - t->des2an;  /* Meta2Ant */
-        long d4a  = t->dist4a  - t->susp4a;            /* Meta4A */
-        long d4b  = t->dist4b  - t->susp4b;            /* Meta4B */
-
-        /* Aplica as fórmulas das metas (evita divisão por zero) */
-        if (d1   != 0) m1   = (double)t->jul1  / d1   * 100.0;
-        if (d2a  != 0) m2a  = (double)t->jul2a / d2a  * (1000.0 / 7.0); /* Fórmula especial */
-        if (d2an != 0) m2an = (double)t->jul2an/ d2an * 100.0;
-        if (d4a  != 0) m4a  = (double)t->jul4a / d4a  * 100.0;
-        if (d4b  != 0) m4b  = (double)t->jul4b / d4b  * 100.0;
-
-        /* Escreve a linha no arquivo */
-        fprintf(f, "%s;%ld;%.2f%%;%.2f%%;%.2f%%;%.2f%%;%.2f%%\n",
-                t->sigla, t->jul1, m1, m2a, m2an, m4a, m4b);
+        escrever_linha_resumo(f, &trib[i]);
     }
     fclose(f);
     printf("   resumo.csv gerado com %d tribunais.\n", n);
@@ -315,16 +337,6 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
         fprintf(stderr, "Erro: parametros invalidos.\n");
         return;
     }
-
-    /* Estrutura auxiliar para agrupar dados por tribunal */
-    typedef struct {
-        char sigla[12];
-        long jul1,  nov1,  susp1,  des1;
-        long jul2a, dist2a, susp2a;
-        long jul2an, dist2an, susp2an, des2an;
-        long jul4a, dist4a, susp4a;
-        long jul4b, dist4b, susp4b;
-    } RT;
 
     RT trib[200];
     int n = 0;
@@ -339,37 +351,9 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
             continue;
         }
 
-        /* Procura se já existe uma entrada para este tribunal */
-        int idx = -1;
-        for (int j = 0; j < n; j++)
-            if (strcmp(trib[j].sigla, p->sigla_tribunal) == 0) { idx = j; break; }
-
-        /* Se não encontrou, cria uma nova entrada */
-        if (idx < 0) {
-            if (n >= 200) continue;
-            idx = n++;
-            memset(&trib[idx], 0, sizeof(RT));
-            strncpy(trib[idx].sigla, p->sigla_tribunal, 11);
-        }
-
-        /* Soma os valores para cada meta */
-        trib[idx].jul1    += p->julgados_2026;
-        trib[idx].nov1    += p->casos_novos_2026;
-        trib[idx].susp1   += p->suspensos_2026;
-        trib[idx].des1    += p->dessobrestados_2026;
-        trib[idx].jul2a   += p->julgm2_a;
-        trib[idx].dist2a  += p->distm2_a;
-        trib[idx].susp2a  += p->suspm2_a;
-        trib[idx].jul2an  += p->julgm2_ant;
-        trib[idx].dist2an += p->distm2_ant;
-        trib[idx].susp2an += p->suspm2_ant;
-        trib[idx].des2an  += p->desom2_ant;
-        trib[idx].jul4a   += p->julgm4_a;
-        trib[idx].dist4a  += p->distm4_a;
-        trib[idx].susp4a  += p->suspm4_a;
-        trib[idx].jul4b   += p->julgm4_b;
-        trib[idx].dist4b  += p->distm4_b;
-        trib[idx].susp4b  += p->suspm4_b;
+        int idx = obter_indice_tribunal(trib, &n, p->sigla_tribunal);
+        if (idx < 0) continue;
+        acumular_metas(&trib[idx], p);
     }
 
     /* Se não encontrou dados para este estado */
@@ -386,27 +370,11 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", nome_arq); return; }
 
     /* Escreve o cabeçalho */
-    fprintf(f, "sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B\n");
+    escrever_cabecalho_resumo(f);
 
     /* Calcula e escreve as metas para cada tribunal do estado */
     for (int i = 0; i < n; i++) {
-        RT *t = &trib[i];
-        double m1=0, m2a=0, m2an=0, m4a=0, m4b=0;
-
-        long d1   = t->nov1  + t->des1  - t->susp1;
-        long d2a  = t->dist2a  - t->susp2a;
-        long d2an = t->dist2an - t->susp2an - t->des2an;
-        long d4a  = t->dist4a  - t->susp4a;
-        long d4b  = t->dist4b  - t->susp4b;
-
-        if (d1   != 0) m1   = (double)t->jul1  / d1   * 100.0;
-        if (d2a  != 0) m2a  = (double)t->jul2a / d2a  * (1000.0 / 7.0);
-        if (d2an != 0) m2an = (double)t->jul2an/ d2an * 100.0;
-        if (d4a  != 0) m4a  = (double)t->jul4a / d4a  * 100.0;
-        if (d4b  != 0) m4b  = (double)t->jul4b / d4b  * 100.0;
-
-        fprintf(f, "%s;%ld;%.2f%%;%.2f%%;%.2f%%;%.2f%%;%.2f%%\n",
-                t->sigla, t->jul1, m1, m2a, m2an, m4a, m4b);
+        escrever_linha_resumo(f, &trib[i]);
     }
     fclose(f);
     printf("   %s gerado com %d tribunal(is) do estado %s.\n", nome_arq, n, uf);
