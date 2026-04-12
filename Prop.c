@@ -2,11 +2,45 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 #include "Libs.h"
 
 /* ===========================================
    FUNÇÕES AUXILIARES INTERNAS
    =========================================== */
+
+static const char *PASTA_SAIDA = "resultados";
+
+/* Garante que a pasta de saída exista */
+static int garantir_pasta_saida(void) {
+#ifdef _WIN32
+    if (_mkdir(PASTA_SAIDA) == 0 || errno == EEXIST) return 1;
+#else
+    if (mkdir(PASTA_SAIDA, 0777) == 0 || errno == EEXIST) return 1;
+#endif
+    fprintf(stderr, "Erro ao criar pasta de saida: %s\n", PASTA_SAIDA);
+    return 0;
+}
+
+/* Monta caminho completo dentro da pasta de saída */
+static int montar_caminho_saida(char *dest, size_t dest_sz, const char *nome_arquivo) {
+    int n = snprintf(dest, dest_sz, "%s/%s", PASTA_SAIDA, nome_arquivo);
+    return n >= 0 && n < (int)dest_sz;
+}
+
+/* UF valida: exatamente 2 letras */
+static int uf_valida(const char *uf) {
+    return uf &&
+           strlen(uf) == 2 &&
+           isalpha((unsigned char)uf[0]) &&
+           isalpha((unsigned char)uf[1]);
+}
 
 /* Versão própria da função strsep (que não existe no Windows) */
 static char *meu_strsep(char **sp, const char *delim) {
@@ -281,15 +315,23 @@ void carregar_arquivo(Lista *L, const char *nome) {
    =========================================== */
 
 void concatenar_arquivos(Lista *L) {
-    FILE *f = fopen("cvs.csv", "w");
-    if (!f) { fprintf(stderr, "Erro ao criar cvs.csv\n"); return; }
+    if (!garantir_pasta_saida()) return;
+
+    char caminho_saida[260];
+    if (!montar_caminho_saida(caminho_saida, sizeof caminho_saida, "cvs.csv")) {
+        fprintf(stderr, "Erro ao montar caminho de saida para cvs.csv\n");
+        return;
+    }
+
+    FILE *f = fopen(caminho_saida, "w");
+    if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
     fprintf(f, CABECALHO_CSV);  /* Escreve o cabeçalho */
     for (int i = 0; i < L->Tamanho; i++)
         ESCREVER_LINHA(f, &L->Dados[i]);  /* Escreve cada registro */
 
     fclose(f);
-    printf("   cvs.csv gerado com %d registros.\n", L->Tamanho);
+    printf("   %s gerado com %d registros.\n", caminho_saida, L->Tamanho);
 }
 
 /* ===========================================
@@ -316,9 +358,17 @@ void gerar_resumo(Lista *L) {
         acumular_metas(&trib[idx], p);
     }
 
+    if (!garantir_pasta_saida()) return;
+
     /* Cria o arquivo resumo.csv */
-    FILE *f = fopen("resumo.csv", "w");
-    if (!f) { fprintf(stderr, "Erro ao criar resumo.csv\n"); return; }
+    char caminho_saida[260];
+    if (!montar_caminho_saida(caminho_saida, sizeof caminho_saida, "resumo.csv")) {
+        fprintf(stderr, "Erro ao montar caminho de saida para resumo.csv\n");
+        return;
+    }
+
+    FILE *f = fopen(caminho_saida, "w");
+    if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
     /* Escreve o cabeçalho */
     escrever_cabecalho_resumo(f);
@@ -328,13 +378,13 @@ void gerar_resumo(Lista *L) {
         escrever_linha_resumo(f, &trib[i]);
     }
     fclose(f);
-    printf("   resumo.csv gerado com %d tribunais.\n", n);
+    printf("   %s gerado com %d tribunais.\n", caminho_saida, n);
 }
 
 /* Função para gerar resumo filtrado por estado (UF) */
 void gerar_resumo_por_estado(Lista *L, const char *uf) {
-    if (!L || !L->Dados || !uf || uf[0] == '\0') {
-        fprintf(stderr, "Erro: parametros invalidos.\n");
+    if (!L || !L->Dados || !uf_valida(uf)) {
+        fprintf(stderr, "Erro: UF invalida. Use exatamente 2 letras (ex: SP).\n");
         return;
     }
 
@@ -366,8 +416,16 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
     char nome_arq[100];
     snprintf(nome_arq, sizeof(nome_arq), "resumo_%s.csv", uf);
 
-    FILE *f = fopen(nome_arq, "w");
-    if (!f) { fprintf(stderr, "Erro ao criar %s\n", nome_arq); return; }
+    if (!garantir_pasta_saida()) return;
+
+    char caminho_saida[260];
+    if (!montar_caminho_saida(caminho_saida, sizeof caminho_saida, nome_arq)) {
+        fprintf(stderr, "Erro ao montar caminho de saida para %s\n", nome_arq);
+        return;
+    }
+
+    FILE *f = fopen(caminho_saida, "w");
+    if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
     /* Escreve o cabeçalho */
     escrever_cabecalho_resumo(f);
@@ -377,7 +435,7 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
         escrever_linha_resumo(f, &trib[i]);
     }
     fclose(f);
-    printf("   %s gerado com %d tribunal(is) do estado %s.\n", nome_arq, n, uf);
+    printf("   %s gerado com %d tribunal(is) do estado %s.\n", caminho_saida, n, uf);
 }
 
 /* ===========================================
@@ -401,8 +459,16 @@ void filtrar_municipio(Lista *L, const char *busca) {
         return;
     }
 
-    FILE *f = fopen(nome_arq, "w");
-    if (!f) { fprintf(stderr, "Erro ao criar %s\n", nome_arq); return; }
+    if (!garantir_pasta_saida()) return;
+
+    char caminho_saida[260];
+    if (!montar_caminho_saida(caminho_saida, sizeof caminho_saida, nome_arq)) {
+        fprintf(stderr, "Erro ao montar caminho de saida para %s\n", nome_arq);
+        return;
+    }
+
+    FILE *f = fopen(caminho_saida, "w");
+    if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
     fprintf(f, CABECALHO_CSV);  /* Escreve o cabeçalho */
 
@@ -415,5 +481,5 @@ void filtrar_municipio(Lista *L, const char *busca) {
         }
     }
     fclose(f);
-    printf("   %d registro(s) encontrado(s) -> %s\n", encontrados, nome_arq);
+    printf("   %d registro(s) encontrado(s) -> %s\n", encontrados, caminho_saida);
 }

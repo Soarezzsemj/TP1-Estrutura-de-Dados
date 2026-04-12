@@ -4,6 +4,23 @@
 #include <ctype.h>
 #include "Libs.h"
 
+/* Remove espacos da string e converte para maiusculo */
+static void normalizar_uf(char *uf) {
+    int escrita = 0;
+    for (int leitura = 0; uf[leitura] != '\0'; leitura++) {
+        if (uf[leitura] == ' ') continue;
+        uf[escrita++] = (char)toupper((unsigned char)uf[leitura]);
+    }
+    uf[escrita] = '\0';
+}
+
+/* UF valida: exatamente 2 letras (A-Z) */
+static int uf_valida(const char *uf) {
+    return strlen(uf) == 2 &&
+           isalpha((unsigned char)uf[0]) &&
+           isalpha((unsigned char)uf[1]);
+}
+
 int main(void) {
 
     /* Lista com os nomes dos 27 arquivos CSV dos tribunais eleitorais */
@@ -52,22 +69,12 @@ int main(void) {
     char estado[10];
     if (fgets(estado, sizeof estado, stdin)) {
         estado[strcspn(estado, "\r\n")] = '\0';
-        /* Remove espaços em branco */
-        for (int i = 0; i < (int)strlen(estado); i++) {
-            if (estado[i] == ' ') {
-                int j = i;
-                while (estado[j] != '\0') {
-                    estado[j] = estado[j+1];
-                    j++;
-                }
-                i--;
-            }
-        }
-        /* Converte para maiúscula */
-        for (int i = 0; estado[i] != '\0'; i++) {
-            estado[i] = (char)toupper((unsigned char)estado[i]);
-        }
-        if (estado[0] != '\0') {
+        normalizar_uf(estado);
+        if (estado[0] == '\0') {
+            printf("   UF vazia. Resumo por estado ignorado.\n");
+        } else if (!uf_valida(estado)) {
+            printf("   UF invalida (%s). Use exatamente 2 letras, ex: SP.\n", estado);
+        } else {
             gerar_resumo_por_estado(L, estado);
         }
     }
