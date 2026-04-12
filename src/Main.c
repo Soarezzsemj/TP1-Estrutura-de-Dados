@@ -115,20 +115,29 @@ int main(void) {
     printf("2. Gerando resumo.csv (5 metas por tribunal)...\n");
     gerar_resumo(L);
 
-    printf("\n4. Digite o estado (UF) para gerar resumo filtrado (ex: SP, RJ, AC): ");
     char estado[10];
-    if (fgets(estado, sizeof estado, stdin)) {
+    while (1) {
+        printf("\n4. Digite o estado (UF) para gerar resumo filtrado (ex: SP, RJ, AC) ou ENTER para pular: ");
+        if (!fgets(estado, sizeof estado, stdin)) {
+            fprintf(stderr, "Erro ao ler a UF informada.\n");
+            break;
+        }
+
         estado[strcspn(estado, "\r\n")] = '\0';
         normalizar_uf(estado);
+
         if (estado[0] == '\0') {
             printf("   UF vazia. Resumo por estado ignorado.\n");
-        } else if (!uf_valida(estado)) {
-            printf("   UF invalida (%s). Nao use numeros e informe uma UF brasileira valida (ex: SP, RJ, AC).\n", estado);
-        } else {
-            gerar_resumo_por_estado(L, estado);
+            break;
         }
-    } else {
-        fprintf(stderr, "Erro ao ler a UF informada.\n");
+
+        if (!uf_valida(estado)) {
+            printf("   UF invalida (%s). Nao use numeros e informe uma UF brasileira valida (ex: SP, RJ, AC).\n", estado);
+            continue;
+        }
+
+        gerar_resumo_por_estado(L, estado);
+        break;
     }
 
     printf("5. Digite o municipio para filtrar (dica: se nao encontrar, tente a grafia com acento): ");
