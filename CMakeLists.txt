@@ -5,11 +5,11 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 
-include_directories(.)
+include_directories(include .)
 
 add_executable(TP1_Estrutura_de_Dados
-        Libs.h
-        Main.c
-        Prop.c)
+        include/Libs.h
+        src/Main.c
+        src/Prop.c)
 
 
