@@ -11,13 +11,8 @@
 #endif
 #include "Libs.h"
 
-/* ===========================================
-   FUNÇÕES AUXILIARES INTERNAS
-   =========================================== */
-
 static const char *PASTA_SAIDA = "resultados";
 
-/* Garante que a pasta de saída exista */
 static int garantir_pasta_saida(void) {
 #ifdef _WIN32
     if (_mkdir(PASTA_SAIDA) == 0 || errno == EEXIST) return 1;
@@ -28,14 +23,12 @@ static int garantir_pasta_saida(void) {
     return 0;
 }
 
-/* Monta caminho completo dentro da pasta de saída */
 static int montar_caminho_saida(char *dest, size_t dest_sz, const char *nome_arquivo) {
     if (!dest || dest_sz == 0 || !nome_arquivo || nome_arquivo[0] == '\0') return 0;
     int n = snprintf(dest, dest_sz, "%s/%s", PASTA_SAIDA, nome_arquivo);
     return n >= 0 && n < (int)dest_sz;
 }
 
-/* Valida se o municipio possui formato aceitavel */
 static int municipio_valido(const char *municipio) {
     if (!municipio || municipio[0] == '\0') return 0;
 
@@ -61,7 +54,6 @@ static int municipio_valido(const char *municipio) {
     return tem_letra;
 }
 
-/* Verifica se a string contém somente caracteres ASCII */
 static int somente_ascii(const char *texto) {
     if (!texto) return 1;
     for (int i = 0; texto[i] != '\0'; i++) {
@@ -70,7 +62,6 @@ static int somente_ascii(const char *texto) {
     return 1;
 }
 
-/* UF valida: exatamente 2 letras e pertencente aos estados do Brasil */
 static int uf_valida(const char *uf) {
     static const char *ufs_validas[] = {
         "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
@@ -92,7 +83,6 @@ static int uf_valida(const char *uf) {
     return 0;
 }
 
-/* Versão própria da função strsep (que não existe no Windows) */
 static char *meu_strsep(char **sp, const char *delim) {
     char *s = *sp;
     if (!s) return NULL;
@@ -103,12 +93,10 @@ static char *meu_strsep(char **sp, const char *delim) {
     return s;
 }
 
-/* Remove caracteres de quebra de linha e espaços do final da string */
 static void trim_eol(char *s) {
     int n = (int)strlen(s);
     while (n > 0 && (s[n-1]=='\r' || s[n-1]=='\n' || s[n-1]==' ' || s[n-1]=='"'))
         s[--n] = '\0';
-    /* Remove aspas do início */
     if (s[0] == '"') {
         int j = 0;
         while (s[j+1] != '\0') {
@@ -119,14 +107,12 @@ static void trim_eol(char *s) {
     }
 }
 
-/* Compara duas strings ignorando diferenças entre maiúsculas e minúsculas */
 static int cmp_ci(const char *a, const char *b) {
     while (*a && *b)
         if (tolower((unsigned char)*a++) != tolower((unsigned char)*b++)) return 0;
     return *a == '\0' && *b == '\0';
 }
 
-/* Gera um nome de arquivo seguro a partir do nome do municipio */
 static void montar_nome_arquivo_municipio(char *dest, size_t dest_sz, const char *busca) {
     size_t j = 0;
     if (!dest || dest_sz == 0) return;
@@ -147,22 +133,19 @@ static void montar_nome_arquivo_municipio(char *dest, size_t dest_sz, const char
     }
 }
 
-/* Detecta automaticamente se o separador do CSV é vírgula ou ponto-e-vírgula */
 static char detectar_sep(const char *linha) {
     return strchr(linha, ';') ? ';' : ',';
 }
 
-/* Estrutura auxiliar para agrupar dados por tribunal */
 typedef struct {
-    char sigla[12];  /* Sigla do tribunal (ex: TRE-AC) */
-    long jul1,  nov1,  susp1,  des1;         /* Para Meta1 */
-    long jul2a, dist2a, susp2a;              /* Para Meta2A */
-    long jul2an, dist2an, susp2an, des2an;   /* Para Meta2Ant */
-    long jul4a, dist4a, susp4a;              /* Para Meta4A */
-    long jul4b, dist4b, susp4b;              /* Para Meta4B */
+    char sigla[12];
+    long jul1,  nov1,  susp1,  des1;
+    long jul2a, dist2a, susp2a;
+    long jul2an, dist2an, susp2an, des2an;
+    long jul4a, dist4a, susp4a;
+    long jul4b, dist4b, susp4b;
 } RT;
 
-/* Preenche o campo correto do processo conforme a coluna do CSV */
 static void preencher_processo_por_coluna(Processo *p, int col, const char *tok) {
     switch (col) {
         case  0: strncpy(p->sigla_tribunal,   tok, 11); break;
@@ -202,7 +185,6 @@ static void preencher_processo_por_coluna(Processo *p, int col, const char *tok)
     }
 }
 
-/* Retorna (ou cria) o índice do tribunal no vetor auxiliar */
 static int obter_indice_tribunal(RT trib[], int *n, const char *sigla) {
     for (int j = 0; j < *n; j++) {
         if (strcmp(trib[j].sigla, sigla) == 0) return j;
@@ -216,7 +198,6 @@ static int obter_indice_tribunal(RT trib[], int *n, const char *sigla) {
     return idx;
 }
 
-/* Soma os valores de um processo nas estruturas de meta do tribunal */
 static void acumular_metas(RT *t, const Processo *p) {
     t->jul1    += p->julgados_2026;
     t->nov1    += p->casos_novos_2026;
@@ -237,7 +218,6 @@ static void acumular_metas(RT *t, const Processo *p) {
     t->susp4b  += p->suspm4_b;
 }
 
-/* Calcula as 5 metas do tribunal */
 static void calcular_metas(const RT *t, double *m1, double *m2a, double *m2an, double *m4a, double *m4b) {
     long d1   = t->nov1  + t->des1  - t->susp1;
     long d2a  = t->dist2a  - t->susp2a;
@@ -253,22 +233,16 @@ static void calcular_metas(const RT *t, double *m1, double *m2a, double *m2an, d
     if (d4b  != 0) *m4b  = (double)t->jul4b / d4b  * 100.0;
 }
 
-/* Escreve cabeçalho padrão do resumo */
 static void escrever_cabecalho_resumo(FILE *f) {
     fprintf(f, "sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B\n");
 }
 
-/* Escreve uma linha de resumo (um tribunal) */
 static void escrever_linha_resumo(FILE *f, const RT *t) {
     double m1, m2a, m2an, m4a, m4b;
     calcular_metas(t, &m1, &m2a, &m2an, &m4a, &m4b);
     fprintf(f, "%s;%ld;%.2f%%;%.2f%%;%.2f%%;%.2f%%;%.2f%%\n",
             t->sigla, t->jul1, m1, m2a, m2an, m4a, m4b);
 }
-
-/* ===========================================
-   ESTRUTURA DE DADOS: LISTA DINÂMICA
-   =========================================== */
 
 Lista *criar_lista(int cap) {
     if (cap <= 0) {
@@ -300,14 +274,14 @@ void destruir_lista(Lista *L) {
     free(L);
 }
 
-void adicionar_processo(Lista *L, Processo P) {
+static void adicionar_processo(Lista *L, Processo P) {
     if (!L || !L->Dados) {
         fprintf(stderr, "Erro: lista invalida ao adicionar processo.\n");
         return;
     }
 
     if (L->Tamanho == L->Capacidade) {
-        L->Capacidade *= 2;  /* Dobra a capacidade quando cheia */
+        L->Capacidade *= 2;
         Processo *novo = (Processo*)realloc(L->Dados, sizeof(Processo) * L->Capacidade);
         if (!novo) {
             fprintf(stderr, "Erro: falha ao expandir a lista de processos.\n");
@@ -317,11 +291,6 @@ void adicionar_processo(Lista *L, Processo P) {
     }
     L->Dados[L->Tamanho++] = P;
 }
-
-/* ===========================================
-   CARREGAR DADOS DE UM ARQUIVO CSV
-   Lê todas as 33 colunas de dados do arquivo
-   =========================================== */
 
 void carregar_arquivo(Lista *L, const char *nome) {
     if (!L || !L->Dados || !nome || nome[0] == '\0') {
@@ -333,31 +302,27 @@ void carregar_arquivo(Lista *L, const char *nome) {
     if (!f) { fprintf(stderr, "Aviso: arquivo nao encontrado: %s\n", nome); return; }
 
     char linha[4096];
-    /* Lê a primeira linha (cabeçalho) apenas para detectar o separador */
     if (!fgets(linha, sizeof linha, f)) { fclose(f); return; }
     char sep = detectar_sep(linha);
     char sep_str[3] = { sep, '\n', '\0' };
 
-    /* Processa cada linha do arquivo */
     while (fgets(linha, sizeof linha, f)) {
         Processo p;
-        memset(&p, 0, sizeof p);  /* Zera todos os campos */
+        memset(&p, 0, sizeof p);
         char *ptr = linha;
         char *tok;
         int col = 0;
 
-        /* Separa a linha em colunas usando o separador detectado */
         while ((tok = meu_strsep(&ptr, sep_str)) != NULL) {
-            trim_eol(tok);  /* Remove quebras de linha */
+            trim_eol(tok);
             preencher_processo_por_coluna(&p, col, tok);
             col++;
         }
-        if (col > 5) adicionar_processo(L, p); /* Ignora linhas vazias ou incompletas */
+        if (col > 5) adicionar_processo(L, p);
     }
     fclose(f);
 }
 
-/* Macro auxiliar para escrever uma linha completa de dados no formato CSV */
 #define ESCREVER_LINHA(fp, p)                                           \
     fprintf((fp),                                                        \
         "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"                                \
@@ -381,7 +346,6 @@ void carregar_arquivo(Lista *L, const char *nome) {
         (p)->distm4_b,(p)->julgm4_b,(p)->suspm4_b,                     \
         (p)->cumprimento_meta4b)
 
-/* Cabeçalho do arquivo CSV com os nomes das colunas */
 #define CABECALHO_CSV \
     "sigla_tribunal,procedimento,ramo_justica,sigla_grau,uf_oj,"        \
     "municipio_oj,id_ultimo_oj,nome,mesano_cnm1,mesano_sent,"           \
@@ -390,11 +354,6 @@ void carregar_arquivo(Lista *L, const char *nome) {
     "cumprimento_meta2a,distm2_ant,julgm2_ant,suspm2_ant,desom2_ant,"  \
     "cumprimento_meta2ant,distm4_a,julgm4_a,suspm4_a,cumprimento_meta4a,"\
     "distm4_b,julgm4_b,suspm4_b,cumprimento_meta4b\n"
-
-/* ===========================================
-   CONCATENAR TODOS OS DADOS EM UM ÚNICO CSV
-   Cria o arquivo cvs.csv com todos os registros
-   =========================================== */
 
 void concatenar_arquivos(Lista *L) {
     if (!L || !L->Dados) {
@@ -413,25 +372,13 @@ void concatenar_arquivos(Lista *L) {
     FILE *f = fopen(caminho_saida, "w");
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
-    fprintf(f, CABECALHO_CSV);  /* Escreve o cabeçalho */
+    fprintf(f, CABECALHO_CSV);
     for (int i = 0; i < L->Tamanho; i++)
-        ESCREVER_LINHA(f, &L->Dados[i]);  /* Escreve cada registro */
+        ESCREVER_LINHA(f, &L->Dados[i]);
 
     fclose(f);
     printf("   %s gerado com %d registros.\n", caminho_saida, L->Tamanho);
 }
-
-/* ===========================================
-   GERAR RESUMO POR TRIBUNAL
-   Cria resumo.csv com estatísticas de 5 metas para cada tribunal
-
-   FÓRMULAS DAS METAS (conforme enunciado):
-   Meta1    = Σjulgados_2026 / (Σcasos_novos + Σdessobrestados - Σsuspensos) × 100%
-   Meta2A   = Σjulgm2_a / (Σdistm2_a - Σsuspm2_a) × (1000/7)
-   Meta2Ant = Σjulgm2_ant / (Σdistm2_ant - Σsuspm2_ant - Σdesom2_ant) × 100%
-   Meta4A   = Σjulgm4_a / (Σdistm4_a - Σsuspm4_a) × 100%
-   Meta4B   = Σjulgm4_b / (Σdistm4_b - Σsuspm4_b) × 100%
-   =========================================== */
 
 void gerar_resumo(Lista *L) {
     if (!L || !L->Dados) {
@@ -439,20 +386,18 @@ void gerar_resumo(Lista *L) {
         return;
     }
 
-    RT trib[200];   /* Suporta até 200 tribunais diferentes */
-    int n = 0;      /* Número de tribunais encontrados */
+    RT trib[200];
+    int n = 0;
 
-    /* Agrupa os dados por tribunal */
     for (int i = 0; i < L->Tamanho; i++) {
         Processo *p = &L->Dados[i];
         int idx = obter_indice_tribunal(trib, &n, p->sigla_tribunal);
-        if (idx < 0) continue;  /* Limite de tribunais atingido */
+        if (idx < 0) continue;
         acumular_metas(&trib[idx], p);
     }
 
     if (!garantir_pasta_saida()) return;
 
-    /* Cria o arquivo resumo.csv */
     char caminho_saida[260];
     if (!montar_caminho_saida(caminho_saida, sizeof caminho_saida, "resumo.csv")) {
         fprintf(stderr, "Erro ao montar caminho de saida para resumo.csv\n");
@@ -462,10 +407,8 @@ void gerar_resumo(Lista *L) {
     FILE *f = fopen(caminho_saida, "w");
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
-    /* Escreve o cabeçalho */
     escrever_cabecalho_resumo(f);
 
-    /* Calcula e escreve as metas para cada tribunal */
     for (int i = 0; i < n; i++) {
         escrever_linha_resumo(f, &trib[i]);
     }
@@ -473,7 +416,6 @@ void gerar_resumo(Lista *L) {
     printf("   %s gerado com %d tribunais.\n", caminho_saida, n);
 }
 
-/* Função para gerar resumo filtrado por estado (UF) */
 void gerar_resumo_por_estado(Lista *L, const char *uf) {
     if (!L || !L->Dados || !uf_valida(uf)) {
         fprintf(stderr, "Erro: UF invalida. Informe uma UF brasileira valida (ex: SP).\n");
@@ -483,11 +425,9 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
     RT trib[200];
     int n = 0;
 
-    /* Agrupa dados por tribunal, apenas do estado especificado */
     for (int i = 0; i < L->Tamanho; i++) {
         Processo *p = &L->Dados[i];
 
-        /* Verifica se o registro pertence ao estado solicitado (case-insensitive) */
         if (tolower((unsigned char)p->uf_oj[0]) != tolower((unsigned char)uf[0]) ||
             tolower((unsigned char)p->uf_oj[1]) != tolower((unsigned char)uf[1])) {
             continue;
@@ -498,13 +438,11 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
         acumular_metas(&trib[idx], p);
     }
 
-    /* Se não encontrou dados para este estado */
     if (n == 0) {
         printf("   Nenhum tribunal encontrado para o estado %s.\n", uf);
         return;
     }
 
-    /* Cria o arquivo resumo_{UF}.csv */
     char nome_arq[100];
     snprintf(nome_arq, sizeof(nome_arq), "resumo_%s.csv", uf);
 
@@ -519,21 +457,14 @@ void gerar_resumo_por_estado(Lista *L, const char *uf) {
     FILE *f = fopen(caminho_saida, "w");
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
-    /* Escreve o cabeçalho */
     escrever_cabecalho_resumo(f);
 
-    /* Calcula e escreve as metas para cada tribunal do estado */
     for (int i = 0; i < n; i++) {
         escrever_linha_resumo(f, &trib[i]);
     }
     fclose(f);
     printf("   %s gerado com %d tribunal(is) do estado %s.\n", caminho_saida, n, uf);
 }
-
-/* ===========================================
-   FILTRAR DADOS POR MUNICÍPIO
-   Cria um arquivo CSV específico com registros de um município
-   =========================================== */
 
 void filtrar_municipio(Lista *L, const char *busca) {
     if (!L || !L->Dados || !busca || busca[0] == '\0') {
@@ -566,13 +497,13 @@ void filtrar_municipio(Lista *L, const char *busca) {
     FILE *f = fopen(caminho_saida, "w");
     if (!f) { fprintf(stderr, "Erro ao criar %s\n", caminho_saida); return; }
 
-    fprintf(f, CABECALHO_CSV);  /* Escreve o cabeçalho */
+    fprintf(f, CABECALHO_CSV);
 
     int encontrados = 0;
     for (int i = 0; i < L->Tamanho; i++) {
         Processo *p = &L->Dados[i];
-        if (cmp_ci(p->municipio_oj, busca)) {  /* Compara ignorando maiúsculas/minúsculas */
-            ESCREVER_LINHA(f, p);  /* Escreve o registro no arquivo */
+        if (cmp_ci(p->municipio_oj, busca)) {
+            ESCREVER_LINHA(f, p);
             encontrados++;
         }
     }

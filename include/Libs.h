@@ -45,7 +45,6 @@ typedef struct {
 
 Lista* criar_lista(int cap);
 void   destruir_lista(Lista *L);
-void   adicionar_processo(Lista *L, Processo P);
 void   carregar_arquivo(Lista *L, const char *nome_arquivo);
 void   concatenar_arquivos(Lista *L);
 void   gerar_resumo(Lista *L);
