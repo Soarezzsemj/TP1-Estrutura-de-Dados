@@ -67,16 +67,16 @@ build\TP1_Estrutura_de_Dados.exe
 
 ```
 TP1-Estrutura-de-Dados/
-├── src/
-│   ├── Main.c          - Programa principal e interface com usuário
-│   └── Prop.c          - Implementação do TAD Lista
+├── CMakeLists.txt              - Configuração CMake
+├── README.md                   - Este arquivo (documentação)
 ├── include/
-│   └── Libs.h          - Interface pública do TAD
-├── dados/testes/       - Arquivos CSV de entrada (teste_TRE-*.csv)
-├── resultados/         - Arquivos CSV de saída (gerado automaticamente)
-└── docs/
-    ├── DOCUMENTACAO.md - Este arquivo
-    └── ARQUITETURA.md  - Detalhes de arquitetura
+│   └── Libs.h                  - Interface pública do TAD
+├── src/
+│   ├── Main.c                  - Programa principal e interface com usuário
+│   └── Prop.c                  - Implementação do TAD Lista
+├── dados/
+│   └── testes/                 - Arquivos CSV de entrada (teste_TRE-*.csv)
+└── resultados/                 - Arquivos CSV de saída (gerado automaticamente)
 ```
 
 ---
@@ -214,8 +214,9 @@ typedef struct {
 - Nome do arquivo: `resultados/cvs.csv`
 - Gera cabecalho com os 33 campos
 - Escreve um registro por linha
+- **Delimitador:** `,` (vírgula) para compatibilidade
 
-**Formato de Saida:**
+**Formato de Saida (cvs.csv):**
 ```
 sigla_tribunal,procedimento,ramo_justica,...[30 campos adicionais]
 TJSP,Civil,Justica Comum,...
@@ -246,12 +247,14 @@ $$\text{Meta 2Ant} = \frac{\sum \text{julgados\_2ant}}{\sum \text{distribuidos\_
 #### Meta 4A e 4B (Fila Inicial)
 $$\text{Meta 4} = \frac{\sum \text{julgados\_4}}{\sum \text{distribuidos\_4} - \sum \text{suspensos\_4}} \times 100\%$$
 
-**Saida:**
+**Saida (resumo.csv):**
 ```
 sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B
 TJSP;5000;85.50%;145.25%;92.30%;78.40%;88.90%
 TRF1;3200;79.80%;138.50%;88.20%;82.10%;91.20%
 ```
+
+**Delimitador:** `;` (ponto-e-vírgula)
 
 ### 3.4 Resumo Filtrado por Estado
 
@@ -296,6 +299,7 @@ Se nenhum resultado for encontrado e a busca contiver apenas ASCII, o sistema su
 ```
 TP1-Estrutura-de-Dados/
 ├── CMakeLists.txt              # Configuracao CMake
+├── README.md                   # Este documento
 ├── include/
 │   └── Libs.h                  # Interface publica do TAD
 ├── src/
@@ -303,10 +307,7 @@ TP1-Estrutura-de-Dados/
 │   └── Prop.c                  # Implementacao do TAD
 ├── dados/
 │   └── testes/                 # CSVs de entrada
-├── resultados/                 # CSVs de saida (gerado)
-└── docs/
-    ├── ARQUITETURA.md          # Detalhes de arquitetura
-    └── DOCUMENTACAO.md         # Este arquivo
+└── resultados/                 # CSVs de saida (gerado)
 ```
 
 ### 4.2 Responsabilidades de Cada Arquivo
@@ -461,7 +462,23 @@ O programa implementa validacoes em multiplos niveis:
 
 ---
 
-## 8. Exemplo de Entrada e Saida
+## 8. Delimitadores CSV - Clarificação
+
+**Importante:** O projeto utiliza delimitadores diferentes para **entrada** e **saída**:
+
+| Tipo de Arquivo | Delimitador | Descrição |
+|---|---|---|
+| **Entrada** (teste_TRE-*.csv) | `;` (ponto-e-vírgula) | Arquivos de entrada fornecidos |
+| **Concatenação** (cvs.csv) | `,` (vírgula) | Todos os dados consolidados |
+| **Resumo** (resumo.csv) | `;` (ponto-e-vírgula) | Metas por tribunal |
+| **Filtro Estado** (resumo_XX.csv) | `;` (ponto-e-vírgula) | Metas por UF |
+| **Filtro Município** ({MUNICIPIO}.csv) | `,` (vírgula) | Dados filtrados por município |
+
+**Detecção Automática:** O código detecta automaticamente o separador dos arquivos de entrada.
+
+---
+
+## 9. Exemplo de Entrada e Saida
 
 ### Entrada (teste_TRE-SP.csv)
 ```
@@ -470,17 +487,28 @@ TJSP;Civil;Justica Comum;1;...;150;...
 TJSP;Criminal;Justica Comum;1;...;200;...
 TRF1;Civil;Justica Federal;1;...;120;...
 ```
+**Delimitador:** `;` (ponto-e-vírgula)
 
-### Saida (resumo.csv)
+### Saida 1 - Concatenacao (cvs.csv)
+```
+sigla_tribunal,procedimento,ramo_justica,sigla_grau,...
+TJSP,Civil,Justica Comum,1,...
+TJSP,Criminal,Justica Comum,1,...
+TRF1,Civil,Justica Federal,1,...
+```
+**Delimitador:** `,` (vírgula)
+
+### Saida 2 - Resumo (resumo.csv)
 ```
 sigla_tribunal;total_julgados_2026;Meta1;Meta2A;Meta2Ant;Meta4A;Meta4B
 TJSP;350;85.50%;145.25%;92.30%;78.40%;88.90%
 TRF1;120;79.80%;138.50%;88.20%;82.10%;91.20%
 ```
+**Delimitador:** `;` (ponto-e-vírgula)
 
 ---
 
-## 9. Testes Recomendados
+## 10. Testes Recomendados
 
 ### Teste 1: Carga de Dados
 - Carregar todos os 27 arquivos
@@ -513,7 +541,7 @@ TRF1;120;79.80%;138.50%;88.20%;82.10%;91.20%
 
 ---
 
-## 10. Conceitos de Programacao Utilizados
+## 11. Conceitos de Programacao Utilizados
 
 ### Estruturas de Dados
 - TAD Lista: implementacao com alocacao dinamica
@@ -533,7 +561,7 @@ TRF1;120;79.80%;138.50%;88.20%;82.10%;91.20%
 
 ---
 
-## 11. Referencias e Recursos
+## 12. Referencias e Recursos
 
 ### Funcoes Padrao de C Utilizadas
 - `fopen()`, `fclose()`: I/O de arquivos
@@ -552,7 +580,7 @@ O projeto segue os padroes de:
 
 ---
 
-## 12. Conclusao
+## 13. Conclusao
 
 Este projeto implementa um sistema completo de manipulacao de dados CSV em C, utilizando:
 - TAD Lista para armazenamento dinamico
